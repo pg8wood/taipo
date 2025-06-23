@@ -6,6 +6,8 @@ from openai import OpenAI
 import subprocess
 import re
 
+DEBUG_MODE = os.getenv("TAIPO_DEBUG") == "1"
+
 def get_openai_response(command: str) -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -34,30 +36,35 @@ def extract_command(text: str) -> str:
     return match.group(1).strip() if match else text.strip()
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: taipo.py <command>")
-        sys.exit(1)
+    full_input = os.getenv("TAIPO_ORIGINAL_COMMAND")
+    if full_input:
+        args = full_input.strip()
+    else:
+        args = " ".join(sys.argv[1:])
 
-    original_args = sys.argv[1:]
-    original_command = " ".join(original_args)
-    print(f"taipo 🤖: Hmm… `{original_command}`? Let me see...")
+    if DEBUG_MODE:
+        print(f"\033[94m🐛 [TAIPO_DEBUG] Failed command:\n{args}\033[0m")
+
+    failed_command = args.split()[0]
+    print(f"taipo 🤖: Hmm… `{failed_command}`? Let me see...")
 
     try:
-        suggestion = get_openai_response(original_args[0])
+        suggestion = get_openai_response(args)
     except Exception as e:
         print(f"❌ OpenAI error: {e}")
         sys.exit(1)
 
+    if DEBUG_MODE:
+        print(f"\033[94m🐛 [TAIPO_DEBUG] OpenAI response:\n{suggestion}\033[0m")
+
     print(f"\n💡 Suggestion:\n{suggestion}")
 
-    fixed_command = extract_command(suggestion)
-    rest_of_args = original_args[1:]
-    full_command = " ".join([fixed_command] + rest_of_args)
-
-    confirm = input(f"\n⚡ Run `{full_command}`? (y/N): ").strip().lower()
+    maybe_command = extract_command(suggestion)
+    confirm = input(f"\n⚡ Run `{maybe_command}`? (y/N): ").strip().lower()
     if confirm == "y":
+        print(f"\n🚀 Running: {maybe_command}")
         try:
-            subprocess.run(full_command, shell=True, check=True)
+            subprocess.run(maybe_command, shell=True, check=True)
             sys.exit(0)
         except subprocess.CalledProcessError as e:
             print(f"❌ That didn't work: {e}")
