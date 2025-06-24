@@ -16,13 +16,19 @@ chmod +x ./taipo.py
 echo ""
 echo "🤖 Choose your taipo mode:"
 echo "1) Manual - Ask before running any command (default)"
-echo "2) Automatic - Run commands automatically without asking"
+echo "2) Smart - Run automatically if AI is confident, ask if unsure"
+echo "3) Autonomous - Run commands automatically without asking ⚠️"
 echo ""
-read -p "Select mode (1-2) [1]: " mode_choice
+echo "⚠️  Warning: Autonomous mode will execute any command the AI suggests without confirmation!"
+echo ""
+read -p "Select mode (1-3) [1]: " mode_choice
 
 case $mode_choice in
   2)
-    mode="automatic"
+    mode="smart"
+    ;;
+  3)
+    mode="autonomous"
     ;;
   *)
     mode="manual"

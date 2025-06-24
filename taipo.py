@@ -23,7 +23,7 @@ def load_config():
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         return "manual"  # Default to manual mode
 
-def get_openai_response(command: str) -> str:
+def get_openai_response(command: str, smart_mode: bool = False) -> tuple[str, float]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         print("❌ Please set your OPENAI_API_KEY in your environment.")
@@ -31,12 +31,22 @@ def get_openai_response(command: str) -> str:
     
     client = OpenAI(api_key=api_key)
 
-    prompt = (
-        f"The command `{command}` was entered in a Unix shell but is not recognized. "
-        "If it's a typo, respond only with the corrected command. "
-        "If it cannot be confidently fixed, respond with a general suggestion. "
-        "No explanations or extra text—just a corrected command or helpful suggestion."
-    )
+    if smart_mode:
+        prompt = (
+            f"The command `{command}` was entered in a Unix shell but is not recognized. "
+            "Respond with ONLY a JSON object containing:\n"
+            "1. 'command': the corrected command (if it's a typo) or a helpful suggestion\n"
+            "2. 'confidence': a number between 0.0 and 1.0 indicating your confidence in this correction\n"
+            "Example: {\"command\": \"git status\", \"confidence\": 0.95}\n"
+            "If you cannot confidently fix it, use a low confidence score (0.0-0.3)."
+        )
+    else:
+        prompt = (
+            f"The command `{command}` was entered in a Unix shell but is not recognized. "
+            "If it's a typo, respond only with the corrected command. "
+            "If it cannot be confidently fixed, respond with a general suggestion. "
+            "No explanations or extra text—just a corrected command or helpful suggestion."
+        )
 
     response = client.chat.completions.create(
         model="gpt-4",
@@ -45,7 +55,20 @@ def get_openai_response(command: str) -> str:
     )
 
     content = response.choices[0].message.content
-    return content.strip() if content else ""
+    if not content:
+        return "", 0.0
+    
+    if smart_mode:
+        try:
+            # Try to parse as JSON for smart mode
+            import json
+            data = json.loads(content.strip())
+            return data.get("command", ""), data.get("confidence", 0.0)
+        except json.JSONDecodeError:
+            # Fallback to regular mode if JSON parsing fails
+            return content.strip(), 0.5
+    else:
+        return content.strip(), 1.0  # Default confidence for non-smart mode
 
 def extract_command(text: str) -> str:
     match = re.search(r"`([^`]+)`", text) or re.search(r'"([^"]+)"', text)
@@ -61,7 +84,7 @@ def execute_command(command: str) -> bool:
     except subprocess.CalledProcessError:
         return False
 
-def process_suggested_command(command: str, mode: str) -> bool:
+def process_suggested_command(command: str, mode: str, confidence: float = 1.0) -> bool:
     """Process the suggested command based on mode"""
     if mode == "manual":
         print(f"✔ Suggestion: {style_command(command)}")
@@ -72,8 +95,24 @@ def process_suggested_command(command: str, mode: str) -> bool:
             print("👍 Skipped.")
             return False
     
-    elif mode == "automatic":
+    elif mode == "autonomous":
         return execute_command(command)
+    
+    elif mode == "smart":
+        confidence_threshold = 0.9  # Run automatically if confidence >= 90%
+        
+        if confidence >= confidence_threshold:
+            print(f"✔ Suggestion: {style_command(command)} (confidence: {confidence:.1%})")
+            return execute_command(command)
+        else:
+            print(f"✔ Suggestion: {style_command(command)} (confidence: {confidence:.1%})")
+            print(f"🤔 Low confidence ({confidence:.1%}) - asking for confirmation")
+            confirm = input(f"\n⚡ Run {style_command(command)}? (y/N): ").strip().lower()
+            if confirm == "y":
+                return execute_command(command)
+            else:
+                print("👍 Skipped.")
+                return False
     
     return False
 
@@ -87,7 +126,8 @@ def main():
 
         failed_command = args.split()[0]
         with yaspin(text=f"[taipo] Trying to make sense of: '{args}'...", color="cyan", side="right") as spinner:
-            suggestion = get_openai_response(args)
+            mode = load_config()
+            suggestion, confidence = get_openai_response(args, smart_mode=(mode == "smart"))
             spinner.ok("✔")
 
         if DEBUG_MODE:
@@ -95,14 +135,11 @@ def main():
 
         maybe_command = extract_command(suggestion)
         
-        # Load mode from config
-        mode = load_config()
-        
         if DEBUG_MODE:
             print(f"\033[94m🐛 [TAIPO_DEBUG] Mode: {mode}\033[0m")
 
         # Run command based on mode
-        success = process_suggested_command(maybe_command, mode)
+        success = process_suggested_command(maybe_command, mode, confidence)
         
         if success:
             sys.exit(0)
