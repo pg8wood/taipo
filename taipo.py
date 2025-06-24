@@ -7,6 +7,7 @@ from openai import OpenAI
 import subprocess
 import re
 from yaspin import yaspin
+import difflib
 
 DEBUG_MODE = os.getenv("TAIPO_DEBUG") == "1"
 
@@ -23,31 +24,39 @@ def load_config():
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         return "manual"  # Default to manual mode
 
-def get_openai_response(command: str, smart_mode: bool = False) -> tuple[str, float]:
+def get_suggested_command(command: str, available_commands: str, smart_mode: bool = False) -> tuple[str, float]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         print("❌ Please set your OPENAI_API_KEY in your environment.")
         sys.exit(1)
-    
-    client = OpenAI(api_key=api_key)
+
+    available_commands = subprocess.getoutput("zsh -c 'print -rlo -- $commands:t'")
+    command_list = available_commands.splitlines()
+    base_command = command.split()[0]
+    close_matches = difflib.get_close_matches(base_command, command_list, n=5, cutoff=0.75)
 
     if smart_mode:
         prompt = (
             f"The command `{command}` was entered in a Unix shell but is not recognized. "
             "Respond with ONLY a JSON object containing:\n"
-            "1. 'command': the corrected command (if it's a typo) or a helpful suggestion\n"
+            "1. 'command': the corrected command.\n"
             "2. 'confidence': a number between 0.0 and 1.0 indicating your confidence in this correction\n"
             "Example: {\"command\": \"git status\", \"confidence\": 0.95}\n"
-            "If you cannot confidently fix it, use a low confidence score (0.0-0.3)."
+            "If you cannot confidently fix it, use a low confidence score (0.0-0.3).\n"
+            f"The most similar known commands to '{command}' are: {close_matches}"
         )
     else:
         prompt = (
             f"The command `{command}` was entered in a Unix shell but is not recognized. "
             "If it's a typo, respond only with the corrected command. "
             "If it cannot be confidently fixed, respond with a general suggestion. "
-            "No explanations or extra text—just a corrected command or helpful suggestion."
+            "No explanations or extra text—just a corrected command.\n"
+            f"The most similar known commands to '{command}' are: {close_matches}"
         )
+    if DEBUG_MODE:
+        print("\033[94m🐛 [TAIPO_DEBUG] OpenAI prompt:\n" + prompt + "\033[0m")
 
+    client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
@@ -125,9 +134,12 @@ def main():
             print(f"\033[94m🐛 [TAIPO_DEBUG] Failed command:\n{args}\033[0m")
 
         failed_command = args.split()[0]
+
+        available_commands_string = subprocess.getoutput("print -- $commands:t")
+
         with yaspin(text=f"[taipo] Trying to make sense of: '{args}'...", color="cyan", side="right") as spinner:
             mode = load_config()
-            suggestion, confidence = get_openai_response(args, smart_mode=(mode == "smart"))
+            suggestion, confidence = get_suggested_command(args, available_commands=available_commands_string, smart_mode=(mode == "smart"))
             spinner.ok("✔")
 
         if DEBUG_MODE:
