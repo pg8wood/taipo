@@ -42,6 +42,15 @@ cd taipo
 ## 💻 Usage 
 **taipo** will automatically be invoked any time your shell doesn't recognize a command ✨ no command line muscle memory changes needed!
 
+### Smarter suggestions
+
+To improve ergonomics, taipo now considers:
+
+- Commands discoverable on your `PATH` (via zsh `$commands`)
+- Recent entries from your `~/.zsh_history` to surface locally-invoked scripts or tools (including `./scripts/foo` becoming `foo`)
+
+This helps corrections prefer things you actually use, even if they are project scripts or binaries not globally installed.
+
 ## 💡 Modes
 
 - 🟢 **manual**: You'll be prompted before any suggested command is run.
