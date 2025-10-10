@@ -52,7 +52,7 @@ cd taipo
 > Smart and autonomous modes will **immediately** execute generated code. Use at your own risk.
 
 
-You can change the mode later by editing `~/.taipo/config.json` or re-running the install script.
+You can change the mode later by editing `~/.config/taipo/config.json` or re-running the install script.
 
 ## 🐛 Debug Mode
 

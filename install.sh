@@ -38,14 +38,19 @@ esac
 echo "✅ Selected mode: $mode"
 
 # Create config.json
-cat > config.json << EOF
+echo "📝 Created config.json with $mode mode"
+CONFIG_DIR="$HOME/.config/taipo"
+mkdir -p "$CONFIG_DIR"
+
+# Write config.json to new location
+cat > "$CONFIG_DIR/config.json" << EOF
 {
   "mode": "$mode",
   "version": "1.0"
 }
 EOF
 
-echo "📝 Created config.json with $mode mode"
+echo "📝 Created $CONFIG_DIR/config.json with $mode mode"
 
 # Add sourcing of local handler.zsh to .zshrc if not already present
 if ! grep -q 'source.*taipo.*command_not_found_handler.zsh' ~/.zshrc; then
@@ -56,8 +61,6 @@ if ! grep -q 'source.*taipo.*command_not_found_handler.zsh' ~/.zshrc; then
 else
   echo "🔁 Hook already present in .zshrc"
 fi
-
-source ~/.zshrc
 
 echo "🎉 taipo is installed!"
 echo "👉 Don't forget to add your OPENAI_API_KEY to your shell config (e.g. .zshrc) and source it or restart your shell!"
