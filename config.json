@@ -1,4 +1,12 @@
 {
   "mode": "manual",
-  "version": "1.0"
+  "version": "1.0",
+  "provider": "ollama",
+  "ollama": {
+    "url": "http://localhost:11434/api/chat",
+    "model": "qwen2.5-coder:14b"
+  },
+  "openai": {
+    "model": "gpt-4o-mini"
+  }
 }
